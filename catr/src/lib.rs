@@ -1,5 +1,5 @@
-use std::error::Error;
 use clap::Parser;
+use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
@@ -22,10 +22,27 @@ pub fn get_args() -> MyResult<Config> {
 }
 
 pub fn run(config: Config) -> MyResult<()> {
-    for filename in config.files {
+    let mut line_num = 0;
+    for filename in &config.files {
         match open(&filename) {
             Err(e) => eprintln!("Error opening {}: {}", filename, e),
-            Ok(_) => println!("Opened {}", filename),
+            Ok(file_reader) => {
+                for line in file_reader.lines() {
+                    let line = line?;
+                    match (config.number_lines, config.number_nonblank_lines) {
+                        (true, _) => {
+                            line_num += 1;
+                            println!("{:>6}\t{}", line_num, line);
+                        }
+                        (_, true) if !line.is_empty() => {
+                            line_num += 1;
+                            println!("{:>6}\t{}", line_num, line);
+                        }
+                        (_, true) => println!(),
+                        _ => println!("{}", line),
+                    }
+                }
+            }
         }
     }
     Ok(())
