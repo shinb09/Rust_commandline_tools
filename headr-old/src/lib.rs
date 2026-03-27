@@ -26,6 +26,7 @@ pub fn get_args() -> MyResult<Config> {
         )
         .arg(
             Arg::with_name("num_lines")
+                .value_name("LINES")
                 .short("n")
                 .long("lines")
                 .help("Number of lines to display")
@@ -34,6 +35,7 @@ pub fn get_args() -> MyResult<Config> {
         )
         .arg(
             Arg::with_name("num_bytes")
+                .value_name("BYTES")
                 .short("c")
                 .long("bytes")
                 .help("Number of bytes to display")
@@ -42,25 +44,36 @@ pub fn get_args() -> MyResult<Config> {
         .get_matches();
 
     if matches.occurrences_of("num_lines") > 0 && matches.occurrences_of("num_bytes") > 0 {
-        return Err("Cannot specify both --lines and --bytes".into());
+        return Err("Cannot specify both '--lines <LINES>' and '--bytes <BYTES>'".into());
     }
+
+    let lines = matches
+        .value_of("num_lines")
+        .map(parse_positive_int)
+        .transpose()
+        .map_err(|e| format!("invalid value '{}' for '--lines <LINES>'", e))?;
+
+    let bytes = matches
+        .value_of("num_bytes")
+        .map(parse_positive_int)
+        .transpose()
+        .map_err(|e| format!("invalid value '{}' for '--bytes <BYTES>'", e))?;
 
     Ok(Config {
         files: matches.values_of_lossy("files").unwrap(),
-        num_lines: parse_positive_int(matches.value_of("num_lines").unwrap())?,
-        num_bytes: match matches.value_of("num_bytes") {
-            Some(val) => Some(parse_positive_int(val)?),
-            None => None,
-        },
+        num_lines: lines.unwrap(),
+        num_bytes: bytes,
     })
 }
 
 pub fn run(config: Config) -> MyResult<()> {
     println!("{:#?}", config);
-    // for filename in &config.files {
-    //     let filename = filename.as_str();
-    //     println!("==> {} <==", filename);
-    // }
+    for filename in config.files {
+        match open(&filename) {
+            Err(e) => eprintln!("{}: {}", filename, e),
+            Ok(_) => println!("Opened: {}", filename),
+        }
+    }
     Ok(())
 }
 
@@ -68,6 +81,13 @@ fn parse_positive_int(val: &str) -> MyResult<usize> {
     match val.parse::<usize>() {
         Ok(num) if num > 0 => Ok(num),
         _ => Err(val.into()),
+    }
+}
+
+fn open(filename: &str) -> MyResult<Box<dyn BufRead>> {
+    match filename {
+        "-" => Ok(Box::new(BufReader::new(io::stdin()))),
+        _ => Ok(Box::new(BufReader::new(File::open(filename)?)))
     }
 }
 
@@ -87,4 +107,9 @@ fn test_parse_positive_int() {
     let res = parse_positive_int("0");
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().to_string(), "0".to_string());
+
+    // 負の数もエラー
+    let res = parse_positive_int("-5");
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().to_string(), "-5".to_string());
 }
