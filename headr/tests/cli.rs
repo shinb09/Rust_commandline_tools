@@ -6,7 +6,7 @@ use rand::{Rng, distributions::Alphanumeric};
 use std::fs::{self, File};
 use std::io::prelude::*;
 
-const PRG: &str = "headr-old";
+const PRG: &str = "headr";
 const EMPTY: &str = "./tests/inputs/empty.txt";
 const ONE: &str = "./tests/inputs/one.txt";
 const TWO: &str = "./tests/inputs/two.txt";
@@ -68,7 +68,7 @@ fn dies_bad_lines() -> Result<()> {
 // --------------------------------------------------
 #[test]
 fn dies_bytes_and_lines() -> Result<()> {
-    let msg = "Cannot specify both '--lines <LINES>' and '--bytes <BYTES>'";
+    let msg = "the argument '--lines <LINES>' cannot be used with '--bytes <BYTES>'";
 
     Command::cargo_bin(PRG)?
         .args(["-n", "1", "-c", "2"])
