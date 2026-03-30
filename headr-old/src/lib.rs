@@ -1,12 +1,13 @@
 use clap::{App, Arg};
+use std::collections::VecDeque;
 use std::error::Error;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read, Write};
 
 #[derive(Debug)]
 pub struct Config {
     files: Vec<String>,
-    num_lines: usize,
+    num_lines: isize,
     num_bytes: Option<usize>,
 }
 
@@ -31,6 +32,7 @@ pub fn get_args() -> MyResult<Config> {
                 .long("lines")
                 .help("Number of lines to display")
                 .default_value("10")
+                .allow_hyphen_values(true)
                 .takes_value(true)
         )
         .arg(
@@ -49,7 +51,7 @@ pub fn get_args() -> MyResult<Config> {
 
     let lines = matches
         .value_of("num_lines")
-        .map(parse_positive_int)
+        .map(parse_int)
         .transpose()
         .map_err(|e| format!("invalid value '{}' for '--lines <LINES>'", e))?;
 
@@ -67,29 +69,23 @@ pub fn get_args() -> MyResult<Config> {
 }
 
 pub fn run(config: Config) -> MyResult<()> {
-    for filename in config.files {
-        match open(&filename) {
+    let num_files = config.files.len();
+
+    for (file_num, filename) in config.files.iter().enumerate() {
+        match open(filename) {
             Err(e) => eprintln!("{}: {}", filename, e),
             Ok(mut reader) => {
-                if config.num_bytes.is_some() {
-                    let mut buf = vec![0; config.num_bytes.unwrap()];
-                    match reader.read_exact(&mut buf) {
-                        Ok(_) => {
-                            let output = String::from_utf8_lossy(&buf);
-                            print!("{}", output);
-                        }
-                        Err(e) => eprintln!("Error reading from {}: {}", filename, e),
-                    }
+                if num_files > 1 {
+                    println!("{}==> {} <==", if file_num > 0 { "\n" } else { "" }, filename);
+                }
+
+                if let Some(num_bytes) = config.num_bytes {
+                    let bytes: Result<Vec<_>, _> = reader.bytes().take(num_bytes).collect();
+                    print!("{}", String::from_utf8_lossy(&bytes?));
+                } else if config.num_lines < 0 {
+                    print_all_but_last_lines(&mut reader, config.num_lines.unsigned_abs())?;
                 } else {
-                    let mut line_buf = String::new();
-                    for _ in 0..config.num_lines {
-                        let bytes = reader.read_line(&mut line_buf)?;
-                        if bytes == 0 {
-                            break;
-                        }
-                        print!("{}", line_buf);
-                        line_buf.clear();
-                    }
+                    print_lines(&mut reader, config.num_lines as usize)?;
                 }
             }
         }
@@ -104,11 +100,49 @@ fn parse_positive_int(val: &str) -> MyResult<usize> {
     }
 }
 
+fn parse_int(val: &str) -> MyResult<isize> {
+    match val.parse::<isize>() {
+        Ok(num) if num != 0 => Ok(num),
+        _ => Err(val.into()),
+    }
+}
+
 fn open(filename: &str) -> MyResult<Box<dyn BufRead>> {
     match filename {
         "-" => Ok(Box::new(BufReader::new(io::stdin()))),
         _ => Ok(Box::new(BufReader::new(File::open(filename)?)))
     }
+}
+
+fn print_lines(reader: &mut dyn BufRead, num_lines: usize) -> MyResult<()> {
+    let mut line_buf = String::new();
+    for _ in 0..num_lines {
+        let bytes = reader.read_line(&mut line_buf)?;
+        if bytes == 0 {
+            break;
+        }
+        print!("{}", line_buf);
+        line_buf.clear();
+    }
+    Ok(())
+}
+
+fn print_all_but_last_lines(reader: &mut dyn BufRead, num_lines: usize) -> MyResult<()> {
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+
+    let mut buf: VecDeque<String> = VecDeque::with_capacity(num_lines);
+
+    let mut line_buf = String::new();
+    while reader.read_line(&mut line_buf)? > 0 {
+        if buf.len() == num_lines {
+            let oldest = buf.pop_front().unwrap();
+            write!(out, "{}", oldest)?;
+        }
+        buf.push_back(line_buf.clone());
+        line_buf.clear();
+    }
+    Ok(())
 }
 
 #[test]
@@ -118,7 +152,7 @@ fn test_parse_positive_int() {
     assert!(res.is_ok());
     assert_eq!(res.unwrap(), 3);
 
-    // 数字出ない文字列はエラー
+    // 数字でない文字列はエラー
     let res = parse_positive_int("abc");
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().to_string(), "abc".to_string());
@@ -132,4 +166,27 @@ fn test_parse_positive_int() {
     let res = parse_positive_int("-5");
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().to_string(), "-5".to_string());
+}
+
+#[test]
+fn test_parse_int() {
+    // 3は正の整数なのでOK
+    let res = parse_int("3");
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap(), 3);
+
+    // 数字でない文字列はエラー
+    let res = parse_positive_int("abc");
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().to_string(), "abc".to_string());
+
+    // 0の場合もエラー
+    let res = parse_positive_int("0");
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().to_string(), "0".to_string());
+
+    // 負の数はOK
+    let res = parse_int("-5");
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap(), -5);
 }

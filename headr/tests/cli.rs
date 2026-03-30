@@ -6,7 +6,7 @@ use rand::{Rng, distributions::Alphanumeric};
 use std::fs::{self, File};
 use std::io::prelude::*;
 
-const PRG: &str = "headr";
+const PRG: &str = "headr-old";
 const EMPTY: &str = "./tests/inputs/empty.txt";
 const ONE: &str = "./tests/inputs/one.txt";
 const TWO: &str = "./tests/inputs/two.txt";
@@ -37,8 +37,7 @@ fn gen_bad_file() -> String {
 fn dies_bad_bytes() -> Result<()> {
     let bad = random_string();
     let expected = format!(
-        "invalid value '{bad}' for \
-        '--bytes <BYTES>': invalid digit found in string"
+        "invalid value '{bad}' for '--bytes <BYTES>'"
     );
 
     Command::cargo_bin(PRG)?
@@ -55,8 +54,7 @@ fn dies_bad_bytes() -> Result<()> {
 fn dies_bad_lines() -> Result<()> {
     let bad = random_string();
     let expected = format!(
-        "error: invalid value '{bad}' for \
-        '--lines <LINES>': invalid digit found in string"
+        "invalid value '{bad}' for '--lines <LINES>'"
     );
     Command::cargo_bin(PRG)?
         .args(["-n", &bad, EMPTY])
@@ -70,8 +68,7 @@ fn dies_bad_lines() -> Result<()> {
 // --------------------------------------------------
 #[test]
 fn dies_bytes_and_lines() -> Result<()> {
-    let msg = "the argument '--lines <LINES>' cannot be \
-               used with '--bytes <BYTES>'";
+    let msg = "Cannot specify both '--lines <LINES>' and '--bytes <BYTES>'";
 
     Command::cargo_bin(PRG)?
         .args(["-n", "1", "-c", "2"])
@@ -162,6 +159,12 @@ fn empty_c4() -> Result<()> {
 
 // --------------------------------------------------
 #[test]
+fn empty_n_3() -> Result<()> {
+    run(&[EMPTY, "-n", "-3"], "tests/expected/empty.txt.n-3.out")
+}
+
+// --------------------------------------------------
+#[test]
 fn one() -> Result<()> {
     run(&[ONE], "tests/expected/one.txt.out")
 }
@@ -174,6 +177,11 @@ fn one_n2() -> Result<()> {
 #[test]
 fn one_n4() -> Result<()> {
     run(&[ONE, "-n", "4"], "tests/expected/one.txt.n4.out")
+}
+
+#[test]
+fn one_n_3() -> Result<()> {
+    run(&[ONE, "-n", "-3"], "tests/expected/one.txt.n-3.out")
 }
 
 #[test]
@@ -204,6 +212,11 @@ fn one_n2_stdin() -> Result<()> {
 #[test]
 fn one_n4_stdin() -> Result<()> {
     run_stdin(&["-n", "4"], ONE, "tests/expected/one.txt.n4.out")
+}
+
+#[test]
+fn one_n_3_stdin() -> Result<()> {
+    run_stdin(&["-n", "-3"], ONE, "tests/expected/one.txt.n-3.out")
 }
 
 #[test]
@@ -238,6 +251,11 @@ fn two_n4() -> Result<()> {
 }
 
 #[test]
+fn two_n_3() -> Result<()> {
+    run(&[TWO, "-n", "-3"], "tests/expected/two.txt.n-3.out")
+}
+
+#[test]
 fn two_c2() -> Result<()> {
     run(&[TWO, "-c", "2"], "tests/expected/two.txt.c2.out")
 }
@@ -260,6 +278,11 @@ fn two_n2_stdin() -> Result<()> {
 #[test]
 fn two_n4_stdin() -> Result<()> {
     run_stdin(&["-n", "4"], TWO, "tests/expected/two.txt.n4.out")
+}
+
+#[test]
+fn two_n_3_stdin() -> Result<()> {
+    run_stdin(&["-n", "-3"], TWO, "tests/expected/two.txt.n-3.out")
 }
 
 #[test]
@@ -289,6 +312,11 @@ fn three_n4() -> Result<()> {
 }
 
 #[test]
+fn three_n_3() -> Result<()> {
+    run(&[THREE, "-n", "-3"], "tests/expected/three.txt.n-3.out")
+}
+
+#[test]
 fn three_c2() -> Result<()> {
     run(&[THREE, "-c", "2"], "tests/expected/three.txt.c2.out")
 }
@@ -311,6 +339,11 @@ fn three_n2_stdin() -> Result<()> {
 #[test]
 fn three_n4_stdin() -> Result<()> {
     run_stdin(&["-n", "4"], THREE, "tests/expected/three.txt.n4.out")
+}
+
+#[test]
+fn three_n_3_stdin() -> Result<()> {
+    run_stdin(&["-n", "-3"], THREE, "tests/expected/three.txt.n-3.out")
 }
 
 #[test]
@@ -340,6 +373,11 @@ fn twelve_n4() -> Result<()> {
 }
 
 #[test]
+fn twelve_n_3() -> Result<()> {
+    run(&[TWELVE, "-n", "-3"], "tests/expected/twelve.txt.n-3.out")
+}
+
+#[test]
 fn twelve_c2() -> Result<()> {
     run(&[TWELVE, "-c", "2"], "tests/expected/twelve.txt.c2.out")
 }
@@ -362,6 +400,11 @@ fn twelve_n2_stdin() -> Result<()> {
 #[test]
 fn twelve_n4_stdin() -> Result<()> {
     run_stdin(&["-n", "4"], TWELVE, "tests/expected/twelve.txt.n4.out")
+}
+
+#[test]
+fn twelve_n_3_stdin() -> Result<()> {
+    run_stdin(&["-n", "-3"], TWELVE, "tests/expected/twelve.txt.n-3.out")
 }
 
 #[test]
@@ -393,6 +436,14 @@ fn multiple_files_n4() -> Result<()> {
     run(
         &["-n", "4", EMPTY, ONE, TWO, THREE, TWELVE],
         "tests/expected/all.n4.out",
+    )
+}
+
+#[test]
+fn multiple_files_n_3() -> Result<()> {
+    run(
+        &[EMPTY, ONE, TWO, THREE, TWELVE, "-n", "-3"],
+        "tests/expected/all.n-3.out",
     )
 }
 
