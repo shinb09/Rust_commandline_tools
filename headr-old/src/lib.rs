@@ -67,11 +67,31 @@ pub fn get_args() -> MyResult<Config> {
 }
 
 pub fn run(config: Config) -> MyResult<()> {
-    println!("{:#?}", config);
     for filename in config.files {
         match open(&filename) {
             Err(e) => eprintln!("{}: {}", filename, e),
-            Ok(_) => println!("Opened: {}", filename),
+            Ok(mut reader) => {
+                if config.num_bytes.is_some() {
+                    let mut buf = vec![0; config.num_bytes.unwrap()];
+                    match reader.read_exact(&mut buf) {
+                        Ok(_) => {
+                            let output = String::from_utf8_lossy(&buf);
+                            print!("{}", output);
+                        }
+                        Err(e) => eprintln!("Error reading from {}: {}", filename, e),
+                    }
+                } else {
+                    let mut line_buf = String::new();
+                    for _ in 0..config.num_lines {
+                        let bytes = reader.read_line(&mut line_buf)?;
+                        if bytes == 0 {
+                            break;
+                        }
+                        print!("{}", line_buf);
+                        line_buf.clear();
+                    }
+                }
+            }
         }
     }
     Ok(())
