@@ -1,6 +1,9 @@
 use clap::Parser;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use std::iter::Sum;
+
+type MyResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Parser, Debug)]
 #[command(name = "wcr", version = "0.1.0", author = "shinb09", about = "Rust wc")]
@@ -36,34 +39,25 @@ pub struct Config {
     pub chars: bool,
 }
 
-impl Config {
-    fn from_args(args: Args) -> Self {
-        let mut config = Config {
+impl From<Args> for Config {
+    fn from(args: Args) -> Self {
+        let any_specified = args.lines || args.words || args.bytes || args.chars;
+        Config {
             files: args.files,
-            lines: args.lines,
-            words: args.words,
-            bytes: args.bytes,
+            lines: if any_specified { args.lines } else { true },
+            words: if any_specified { args.words } else { true },
+            bytes: if any_specified { args.bytes } else { true },
             chars: args.chars,
-        };
-
-        if [args.lines, args.words, args.bytes, args.chars]
-            .iter()
-            .all(|v| v == &false)
-        {
-            config.lines = true;
-            config.words = true;
-            config.bytes = true;
         }
-        config
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FileInfo {
-    num_lines: usize,
-    num_words: usize,
-    num_bytes: usize,
-    num_chars: usize,
+    pub num_lines: usize,
+    pub num_words: usize,
+    pub num_bytes: usize,
+    pub num_chars: usize,
 }
 
 impl FileInfo {
@@ -92,27 +86,49 @@ impl FileInfo {
     }
 }
 
-type MyResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+impl Sum for FileInfo {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(
+            FileInfo {
+                num_lines: 0,
+                num_words: 0,
+                num_bytes: 0,
+                num_chars: 0,
+            },
+            |acc, info| FileInfo {
+                num_lines: acc.num_lines + info.num_lines,
+                num_words: acc.num_words + info.num_words,
+                num_bytes: acc.num_bytes + info.num_bytes,
+                num_chars: acc.num_chars + info.num_chars,
+            },
+        )
+    }
+}
 
 pub fn get_args() -> MyResult<Config> {
-    let args = Args::parse();
-    Ok(Config::from_args(args))
+    Ok(Args::parse().into())
 }
 
 pub fn run(config: Config) -> MyResult<()> {
-    for file in &config.files {
-        match open(file) {
-            Err(e) => eprintln!("{}: {}", file, e),
-            Ok(mut _reader) => match FileInfo::count(_reader) {
-                Err(e) => eprintln!("{}: {}", file, e),
-                Ok(info) => {
-                    println!(
-                        "{:>8}{:>8}{:>8}{:>8}\t{}",
-                        info.num_lines, info.num_words, info.num_bytes, info.num_chars, file
-                    )
-                }
+    let file_infos: Vec<FileInfo> = config
+        .files
+        .iter()
+        .filter_map(|file| {
+            open(file)
+                .and_then(|r| FileInfo::count(r))
+                .map_err(|e| eprintln!("{file}: {e}"))
+                .ok()
+        })
+        .collect();
+    show_info(&file_infos, &config);
+    if let Some(total) = calc_total(&file_infos) {
+        show_info(
+            &[total],
+            &Config {
+                files: vec!["total".to_string()],
+                ..config
             },
-        }
+        );
     }
     Ok(())
 }
@@ -121,6 +137,52 @@ fn open(filename: &str) -> MyResult<Box<dyn BufRead>> {
     match filename {
         "-" => Ok(Box::new(BufReader::new(io::stdin()))),
         _ => Ok(Box::new(BufReader::new(File::open(filename)?))),
+    }
+}
+
+fn show_info(file_infos: &[FileInfo], config: &Config) {
+    const MIN_WIDTH: usize = 4;
+
+    type Extractor = fn(&FileInfo) -> usize;
+    let col_width = |f: Extractor| {
+        (file_infos
+            .iter()
+            .map(f)
+            .max()
+            .unwrap_or(0)
+            .to_string()
+            .len()
+            + 1)
+        .max(MIN_WIDTH)
+    };
+
+    let num_lines = col_width(|i| i.num_lines);
+    let num_words = col_width(|i| i.num_words);
+    let num_bytes = col_width(|i| i.num_bytes);
+    let num_chars = col_width(|i| i.num_chars);
+
+    for (info, file) in file_infos.iter().zip(&config.files) {
+        let fields: &[(bool, usize, usize)] = &[
+            (config.lines, info.num_lines, num_lines),
+            (config.words, info.num_words, num_words),
+            (config.bytes, info.num_bytes, num_bytes),
+            (config.chars, info.num_chars, num_chars),
+        ];
+        let buf: String = fields
+            .into_iter()
+            .filter(|(enabled, ..)| *enabled)
+            .map(|(_, val, width)| format!("{val:>width$}"))
+            .collect();
+        let file_name = if file == "-" { "" } else { file };
+        println!("{buf} {file_name}");
+    }
+}
+
+fn calc_total(file_infos: &[FileInfo]) -> Option<FileInfo> {
+    if file_infos.len() > 1 {
+        Some(file_infos.iter().cloned().sum())
+    } else {
+        None
     }
 }
 
