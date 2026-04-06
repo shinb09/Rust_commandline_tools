@@ -2,7 +2,7 @@ use anyhow::Result;
 use assert_cmd::Command;
 use predicates::prelude::*;
 use pretty_assertions::assert_eq;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{Rng, distributions::Alphanumeric};
 use std::fs;
 use tempfile::NamedTempFile;
 
@@ -175,7 +175,7 @@ fn run_outfile(test: &Test) -> Result<()> {
     let outpath = &outfile.path().to_str().unwrap();
 
     Command::cargo_bin(PRG)?
-        .args([test.input, outpath])
+        .args([test.input, "-o", outpath])
         .assert()
         .success()
         .stdout("");
@@ -191,7 +191,7 @@ fn run_outfile_count(test: &Test) -> Result<()> {
     let outpath = &outfile.path().to_str().unwrap();
 
     Command::cargo_bin(PRG)?
-        .args([test.input, outpath, "--count"])
+        .args([test.input, "-o", outpath, "--count"])
         .assert()
         .success()
         .stdout("");
@@ -210,7 +210,7 @@ fn run_stdin_outfile_count(test: &Test) -> Result<()> {
     let outpath = &outfile.path().to_str().unwrap();
 
     Command::cargo_bin(PRG)?
-        .args(["-", outpath, "-c"])
+        .args(["-", "-o", outpath, "-c"])
         .write_stdin(input)
         .assert()
         .stdout("");
