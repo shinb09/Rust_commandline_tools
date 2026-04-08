@@ -2,3 +2,4 @@
 */target
 **/expected/
 .editorconfig
+findr/tests/inputs/
